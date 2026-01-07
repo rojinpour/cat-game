@@ -1,0 +1,890 @@
+<!--
+CUTE CAT GAME (single-file)
+Save as: index.html
+Run: VS Code → Live Server → Open in browser
+
+Controls:
+- Move: Arrow keys / WASD
+- Dash: Shift (short burst)
+- Pause: P
+Goal:
+- Collect fish 🐟, avoid roombas 🤖
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Cat Dash: Fish Quest</title>
+  <style>
+    :root{
+      --bg:#0b0c0d;
+      --panel: rgba(255,255,255,.06);
+      --line: rgba(255,255,255,.12);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.62);
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      background: radial-gradient(1200px 900px at 30% 20%, rgba(120,80,255,.18), transparent 55%),
+                  radial-gradient(1200px 900px at 80% 80%, rgba(0,210,255,.14), transparent 55%),
+                  var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      height: 100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+    }
+    .shell{
+      width:min(980px, 94vw);
+      aspect-ratio: 16/9;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      box-shadow: 0 30px 120px rgba(0,0,0,.55);
+      position: relative;
+      overflow:hidden;
+    }
+    canvas{ width:100%; height:100%; display:block; }
+    .hud{
+      position:absolute; inset:0;
+      pointer-events:none;
+      padding: 14px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap: 10px;
+    }
+    .topbar{
+      display:flex; justify-content:space-between; gap: 10px; align-items:flex-start;
+    }
+    .pill{
+      pointer-events:none;
+      display:inline-flex;
+      gap: 10px;
+      align-items:center;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.25);
+      backdrop-filter: blur(10px);
+      font-size: 13px;
+      color: rgba(255,255,255,.82);
+    }
+    .pill b{ color: rgba(255,255,255,.95); }
+    .hint{
+      text-align:right;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .bottom{
+      display:flex; justify-content:space-between; align-items:flex-end; gap: 10px;
+    }
+    .bar{
+      width: 240px;
+      height: 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      overflow:hidden;
+    }
+    .fill{
+      height:100%;
+      width: 100%;
+      background: linear-gradient(90deg, rgba(120,80,255,.9), rgba(0,210,255,.85));
+      transform-origin:left center;
+      transform: scaleX(1);
+    }
+    .overlay{
+      position:absolute; inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 18px;
+      background: radial-gradient(1200px 700px at 50% 20%, rgba(255,255,255,.08), transparent 60%),
+                  rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+    }
+    .card{
+      pointer-events:auto;
+      width:min(520px, 96%);
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.35);
+      padding: 18px;
+      box-shadow: 0 30px 110px rgba(0,0,0,.65);
+    }
+    .title{
+      font-size: 26px;
+      margin: 0 0 8px;
+      letter-spacing: -0.4px;
+    }
+    .desc{
+      margin: 0 0 14px;
+      color: rgba(255,255,255,.72);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .small{
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      padding: 10px 12px;
+      font-size: 13px;
+      color: rgba(255,255,255,.74);
+      line-height: 1.35;
+    }
+    .small b{ color: rgba(255,255,255,.92); }
+    .row{
+      display:flex;
+      gap: 10px;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+    button{
+      pointer-events:auto;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.92);
+      border-radius: 16px;
+      padding: 12px 14px;
+      cursor:pointer;
+      font-weight: 650;
+      font-size: 13.5px;
+      transition: transform .15s ease, background .15s ease, border-color .15s ease;
+    }
+    button:hover{
+      transform: translateY(-2px);
+      border-color: rgba(255,255,255,.22);
+      background: rgba(255,255,255,.08);
+    }
+    button.primary{
+      background: rgba(120,80,255,.18);
+      border-color: rgba(120,80,255,.55);
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <canvas id="c"></canvas>
+
+    <div class="hud">
+      <div class="topbar">
+        <div class="pill">
+          <span>🐾</span>
+          <span>Score: <b id="score">0</b></span>
+          <span>Fish: <b id="fish">0</b></span>
+          <span>Level: <b id="level">1</b></span>
+        </div>
+        <div class="hint">
+          Move: <b>WASD/Arrows</b> • Dash: <b>Shift</b><br/>
+          Pause: <b>P</b> • Collect fish • Avoid roombas
+        </div>
+      </div>
+
+      <div class="bottom">
+        <div class="pill">
+          💜 Dash
+          <div class="bar"><div class="fill" id="dashFill"></div></div>
+        </div>
+        <div class="pill" id="msg" style="opacity:.92;">Find 8 fish to level up ✨</div>
+      </div>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="card">
+        <h1 class="title">Cat Dash: Fish Quest</h1>
+        <p class="desc">
+          You’re a cute little cat in a dreamy room. Grab fish 🐟 for points.
+          Roombas 🤖 chase you. Survive, level up, and vibe.
+        </p>
+
+        <div class="grid">
+          <div class="small"><b>Goal</b><br/>Collect fish to level up. Each level adds more chaos.</div>
+          <div class="small"><b>Tip</b><br/>Dash to escape chases. Save it for close calls.</div>
+        </div>
+
+        <div class="row">
+          <button id="how">How to Play</button>
+          <button class="primary" id="start">Start Game</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Canvas setup (hi-DPI) =====
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+
+    function resize(){
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0); // draw in CSS pixels
+      W = rect.width; H = rect.height;
+    }
+    let W=0, H=0;
+    window.addEventListener("resize", resize);
+    resize();
+
+    // ===== UI refs =====
+    const elScore = document.getElementById("score");
+    const elFish = document.getElementById("fish");
+    const elLevel = document.getElementById("level");
+    const elDashFill = document.getElementById("dashFill");
+    const elMsg = document.getElementById("msg");
+    const overlay = document.getElementById("overlay");
+    const startBtn = document.getElementById("start");
+    const howBtn = document.getElementById("how");
+
+    // ===== Input =====
+    const keys = new Set();
+    window.addEventListener("keydown", (e) => {
+      if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "].includes(e.key)) e.preventDefault();
+      keys.add(e.key.toLowerCase());
+      if (e.key.toLowerCase() === "p") togglePause();
+    });
+    window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+    // ===== Helpers =====
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const len = (x,y) => Math.hypot(x,y);
+    const rand = (a,b)=> a + Math.random()*(b-a);
+
+    function wrapText(text, x, y, maxWidth, lineHeight){
+      const words = text.split(" ");
+      let line = "";
+      for (let n=0; n<words.length; n++){
+        const testLine = line + words[n] + " ";
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > maxWidth && n>0){
+          ctx.fillText(line, x, y);
+          line = words[n] + " ";
+          y += lineHeight;
+        } else line = testLine;
+      }
+      ctx.fillText(line, x, y);
+    }
+
+    // ===== Game state =====
+    let running = false;
+    let paused = false;
+
+    const state = {
+      level: 1,
+      score: 0,
+      fishCollected: 0,
+      fishToLevel: 8,
+
+      dash: {
+        cd: 2.2,           // seconds to recharge
+        t: 0,              // time since last use
+        duration: 0.18,    // seconds
+        active: 0
+      },
+
+      shake: 0
+    };
+
+    // ===== Entities =====
+    const cat = {
+      x: 120, y: 120,
+      r: 18,
+      vx: 0, vy: 0,
+      speed: 210,          // px/s
+      dashSpeed: 520,
+      face: 1,             // direction for drawing
+      hp: 3,
+      invuln: 0
+    };
+
+    const fishes = [];
+    const bots = [];
+    const puffs = []; // particles
+
+    function spawnFish(n=1){
+      for (let i=0;i<n;i++){
+        fishes.push({
+          x: rand(40, W-40),
+          y: rand(40, H-40),
+          r: 10,
+          bob: rand(0, Math.PI*2),
+          alive: true
+        });
+      }
+    }
+
+    function spawnBot(n=1){
+      for (let i=0;i<n;i++){
+        bots.push({
+          x: rand(60, W-60),
+          y: rand(60, H-60),
+          r: 16,
+          vx: 0, vy: 0,
+          max: rand(90, 130) + state.level*6,
+          jitter: rand(0, Math.PI*2),
+          alive: true
+        });
+      }
+    }
+
+    function burst(x,y, count=14){
+      for (let i=0;i<count;i++){
+        puffs.push({
+          x, y,
+          vx: rand(-120,120),
+          vy: rand(-120,120),
+          r: rand(2,5),
+          life: rand(0.35, 0.7)
+        });
+      }
+    }
+
+    function resetGame(){
+      state.level = 1;
+      state.score = 0;
+      state.fishCollected = 0;
+      state.fishToLevel = 8;
+      state.shake = 0;
+      state.dash.t = state.dash.cd;
+      state.dash.active = 0;
+
+      cat.x = W*0.35; cat.y = H*0.55;
+      cat.vx = 0; cat.vy = 0;
+      cat.hp = 3;
+      cat.invuln = 0;
+
+      fishes.length = 0;
+      bots.length = 0;
+      puffs.length = 0;
+
+      spawnFish(10);
+      spawnBot(2);
+      updateUI();
+      elMsg.textContent = `Find ${state.fishToLevel} fish to level up ✨`;
+    }
+
+    function updateUI(){
+      elScore.textContent = String(state.score);
+      elFish.textContent = String(state.fishCollected);
+      elLevel.textContent = String(state.level);
+    }
+
+    function togglePause(){
+      if (!running) return;
+      paused = !paused;
+      elMsg.textContent = paused ? "Paused (press P to resume)" : `Find ${state.fishToLevel} fish to level up ✨`;
+    }
+
+    // ===== Drawing =====
+    function drawBackground(t){
+      // subtle floor grid + vignette
+      ctx.clearRect(0,0,W,H);
+
+      // vignette
+      const v = ctx.createRadialGradient(W*0.5, H*0.45, 80, W*0.5, H*0.45, Math.max(W,H)*0.8);
+      v.addColorStop(0, "rgba(255,255,255,0.03)");
+      v.addColorStop(1, "rgba(0,0,0,0.35)");
+      ctx.fillStyle = v;
+      ctx.fillRect(0,0,W,H);
+
+      // grid
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 1;
+      const step = 42;
+      ctx.beginPath();
+      for (let x=0; x<=W; x+=step){
+        ctx.moveTo(x,0); ctx.lineTo(x,H);
+      }
+      for (let y=0; y<=H; y+=step){
+        ctx.moveTo(0,y); ctx.lineTo(W,y);
+      }
+      ctx.stroke();
+
+      // soft blobs
+      const blobs = [
+        {x: W*0.18, y: H*0.20, r: 220, c:"rgba(120,80,255,0.10)"},
+        {x: W*0.82, y: H*0.24, r: 240, c:"rgba(0,210,255,0.08)"},
+        {x: W*0.70, y: H*0.86, r: 260, c:"rgba(255,190,60,0.06)"},
+      ];
+      for (const b of blobs){
+        ctx.beginPath();
+        ctx.fillStyle = b.c;
+        ctx.arc(b.x + Math.sin(t*0.0006)*10, b.y + Math.cos(t*0.00055)*10, b.r, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+
+    function drawFish(f){
+      const bob = Math.sin(f.bob) * 3;
+      const x = f.x, y = f.y + bob;
+
+      // glow
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(0,210,255,0.16)";
+      ctx.arc(x, y, 18, 0, Math.PI*2);
+      ctx.fill();
+
+      // body
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,255,255,0.85)";
+      ctx.ellipse(x, y, 10, 6, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // tail
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,255,255,0.75)";
+      ctx.moveTo(x-10, y);
+      ctx.lineTo(x-18, y-6);
+      ctx.lineTo(x-18, y+6);
+      ctx.closePath();
+      ctx.fill();
+
+      // eye
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(0,0,0,0.6)";
+      ctx.arc(x+4, y-1, 1.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    function drawBot(b, t){
+      const wob = Math.sin(t*0.004 + b.jitter) * 1.2;
+      const x=b.x, y=b.y+wob;
+
+      // shadow
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.ellipse(x, y+14, 14, 6, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // body
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,255,255,0.14)";
+      ctx.arc(x, y, b.r, 0, Math.PI*2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // face strip
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,255,255,0.10)";
+      ctx.roundRect(x-b.r+4, y-6, (b.r*2)-8, 12, 6);
+      ctx.fill();
+
+      // angry eyes
+      ctx.strokeStyle = "rgba(255,120,120,0.7)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x-6, y-1); ctx.lineTo(x-2, y-3);
+      ctx.moveTo(x+6, y-1); ctx.lineTo(x+2, y-3);
+      ctx.stroke();
+
+      // little wheels
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.beginPath();
+      ctx.arc(x-7, y+10, 2.4, 0, Math.PI*2);
+      ctx.arc(x+7, y+10, 2.4, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    function drawCat(c, t){
+      const bob = Math.sin(t*0.006) * 1.6;
+      const x=c.x, y=c.y+bob;
+
+      // shadow
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(0,0,0,0.35)";
+      ctx.ellipse(x, y+18, 16, 7, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // body glow when dashing
+      if (state.dash.active > 0){
+        ctx.beginPath();
+        ctx.fillStyle = "rgba(120,80,255,0.22)";
+        ctx.arc(x, y, 30, 0, Math.PI*2);
+        ctx.fill();
+      }
+
+      // body (cute blob)
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.ellipse(x, y+6, 16, 14, 0, 0, Math.PI*2);
+      ctx.fill();
+
+      // head
+      ctx.beginPath();
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.arc(x, y-6, 16, 0, Math.PI*2);
+      ctx.fill();
+
+      // ears
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.beginPath();
+      ctx.moveTo(x-10, y-16);
+      ctx.lineTo(x-18, y-30);
+      ctx.lineTo(x-2, y-24);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(x+10, y-16);
+      ctx.lineTo(x+18, y-30);
+      ctx.lineTo(x+2, y-24);
+      ctx.closePath();
+      ctx.fill();
+
+      // inner ears
+      ctx.fillStyle = "rgba(255,190,200,0.45)";
+      ctx.beginPath();
+      ctx.moveTo(x-10, y-18);
+      ctx.lineTo(x-15, y-28);
+      ctx.lineTo(x-4, y-24);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(x+10, y-18);
+      ctx.lineTo(x+15, y-28);
+      ctx.lineTo(x+4, y-24);
+      ctx.closePath();
+      ctx.fill();
+
+      // face direction
+      const dir = c.face;
+
+      // eyes
+      ctx.fillStyle = "rgba(0,0,0,0.65)";
+      ctx.beginPath();
+      ctx.arc(x-5 + dir*1.5, y-8, 2.2, 0, Math.PI*2);
+      ctx.arc(x+5 + dir*1.5, y-8, 2.2, 0, Math.PI*2);
+      ctx.fill();
+
+      // cheeks
+      ctx.fillStyle = "rgba(255,150,170,0.35)";
+      ctx.beginPath();
+      ctx.arc(x-9 + dir*1.5, y-4, 3.2, 0, Math.PI*2);
+      ctx.arc(x+9 + dir*1.5, y-4, 3.2, 0, Math.PI*2);
+      ctx.fill();
+
+      // nose
+      ctx.fillStyle = "rgba(255,150,170,0.6)";
+      ctx.beginPath();
+      ctx.moveTo(x + dir*2, y-5);
+      ctx.lineTo(x-2 + dir*2, y-2);
+      ctx.lineTo(x+2 + dir*2, y-2);
+      ctx.closePath();
+      ctx.fill();
+
+      // mouth
+      ctx.strokeStyle = "rgba(0,0,0,0.45)";
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x + dir*2, y-1);
+      ctx.quadraticCurveTo(x-2 + dir*2, y+2, x-5 + dir*2, y+1);
+      ctx.moveTo(x + dir*2, y-1);
+      ctx.quadraticCurveTo(x+2 + dir*2, y+2, x+5 + dir*2, y+1);
+      ctx.stroke();
+
+      // whiskers
+      ctx.strokeStyle = "rgba(0,0,0,0.32)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(x-2 + dir*2, y-2); ctx.lineTo(x-18 + dir*2, y-6);
+      ctx.moveTo(x-2 + dir*2, y);   ctx.lineTo(x-18 + dir*2, y);
+      ctx.moveTo(x-2 + dir*2, y+2); ctx.lineTo(x-18 + dir*2, y+6);
+
+      ctx.moveTo(x+2 + dir*2, y-2); ctx.lineTo(x+18 + dir*2, y-6);
+      ctx.moveTo(x+2 + dir*2, y);   ctx.lineTo(x+18 + dir*2, y);
+      ctx.moveTo(x+2 + dir*2, y+2); ctx.lineTo(x+18 + dir*2, y+6);
+      ctx.stroke();
+
+      // invuln ring
+      if (c.invuln > 0){
+        ctx.beginPath();
+        ctx.strokeStyle = "rgba(255,255,255,0.22)";
+        ctx.lineWidth = 2;
+        ctx.arc(x, y, 26, 0, Math.PI*2);
+        ctx.stroke();
+      }
+
+      // hearts = HP
+      for (let i=0;i<c.hp;i++){
+        const hx = 18 + i*18;
+        const hy = 42;
+        ctx.save();
+        ctx.translate(hx, hy);
+        ctx.scale(0.9,0.9);
+        ctx.fillStyle = "rgba(255,120,160,0.75)";
+        ctx.beginPath();
+        ctx.moveTo(0, 4);
+        ctx.bezierCurveTo(-8, -2, -6, -12, 0, -6);
+        ctx.bezierCurveTo(6, -12, 8, -2, 0, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // ===== Game loop =====
+    let last = performance.now();
+
+    function step(now){
+      const dt = Math.min(0.033, (now - last)/1000);
+      last = now;
+
+      if (running && !paused) update(dt);
+      render(now);
+
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+
+    function update(dt){
+      // dash recharge
+      state.dash.t = clamp(state.dash.t + dt, 0, state.dash.cd);
+      if (state.dash.active > 0) state.dash.active = Math.max(0, state.dash.active - dt);
+
+      // invulnerability timer
+      if (cat.invuln > 0) cat.invuln = Math.max(0, cat.invuln - dt);
+
+      // movement input
+      let ix = 0, iy = 0;
+      if (keys.has("arrowleft") || keys.has("a")) ix -= 1;
+      if (keys.has("arrowright") || keys.has("d")) ix += 1;
+      if (keys.has("arrowup") || keys.has("w")) iy -= 1;
+      if (keys.has("arrowdown") || keys.has("s")) iy += 1;
+
+      const mag = len(ix,iy) || 1;
+      ix /= mag; iy /= mag;
+
+      if (ix !== 0) cat.face = ix > 0 ? 1 : -1;
+
+      // dash
+      const wantDash = keys.has("shift") && state.dash.t >= state.dash.cd && (ix || iy);
+      if (wantDash){
+        state.dash.t = 0;
+        state.dash.active = state.dash.duration;
+        burst(cat.x, cat.y, 22);
+      }
+
+      const spd = (state.dash.active > 0) ? cat.dashSpeed : cat.speed;
+      cat.vx = ix * spd;
+      cat.vy = iy * spd;
+
+      cat.x += cat.vx * dt;
+      cat.y += cat.vy * dt;
+
+      // bounds
+      cat.x = clamp(cat.x, 26, W-26);
+      cat.y = clamp(cat.y, 30, H-26);
+
+      // fish bob update
+      for (const f of fishes) f.bob += dt*3;
+
+      // bots chase
+      for (const b of bots){
+        const dx = cat.x - b.x;
+        const dy = cat.y - b.y;
+        const d = len(dx,dy) || 1;
+        const ux = dx/d, uy = dy/d;
+
+        // add slight wobble
+        b.jitter += dt * (1.6 + state.level*0.05);
+        const wobx = Math.cos(b.jitter) * 0.25;
+        const woby = Math.sin(b.jitter*1.1) * 0.25;
+
+        const ax = (ux + wobx) * b.max;
+        const ay = (uy + woby) * b.max;
+
+        // smooth velocity
+        b.vx += (ax - b.vx) * (dt * 3.5);
+        b.vy += (ay - b.vy) * (dt * 3.5);
+
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+
+        // bounce-ish bounds
+        if (b.x < 24 || b.x > W-24) b.vx *= -0.7;
+        if (b.y < 24 || b.y > H-24) b.vy *= -0.7;
+        b.x = clamp(b.x, 24, W-24);
+        b.y = clamp(b.y, 24, H-24);
+
+        // collision with cat
+        const hit = len(cat.x - b.x, cat.y - b.y) < (cat.r + b.r - 2);
+        if (hit && cat.invuln <= 0){
+          cat.hp -= 1;
+          cat.invuln = 1.0;
+          state.shake = 0.18;
+          burst(cat.x, cat.y, 26);
+          elMsg.textContent = cat.hp > 0 ? "Ouch! Roomba bonk 😵" : "Game over 💀";
+          if (cat.hp <= 0) endGame();
+        }
+      }
+
+      // collect fish
+      for (const f of fishes){
+        if (!f.alive) continue;
+        if (len(cat.x - f.x, cat.y - f.y) < (cat.r + f.r + 2)){
+          f.alive = false;
+          state.score += 120 + state.level*15;
+          state.fishCollected += 1;
+          burst(f.x, f.y, 18);
+        }
+      }
+      // remove dead fish + respawn if needed
+      for (let i=fishes.length-1;i>=0;i--) if (!fishes[i].alive) fishes.splice(i,1);
+      if (fishes.length < 6) spawnFish(4);
+
+      // level up
+      if (state.fishCollected >= state.fishToLevel){
+        state.level += 1;
+        state.fishCollected = 0;
+        state.fishToLevel = Math.min(14, state.fishToLevel + 2);
+        // add difficulty
+        spawnBot(1);
+        spawnFish(5);
+        state.score += 250;
+        elMsg.textContent = `Level up! Now level ${state.level} ✨`;
+        setTimeout(() => {
+          if (running && !paused) elMsg.textContent = `Find ${state.fishToLevel} fish to level up ✨`;
+        }, 1200);
+      }
+
+      // particles
+      for (let i=puffs.length-1;i>=0;i--){
+        const p = puffs[i];
+        p.life -= dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vx *= (1 - dt*2.5);
+        p.vy *= (1 - dt*2.5);
+        if (p.life <= 0) puffs.splice(i,1);
+      }
+
+      // HUD
+      updateUI();
+      const dashPct = clamp(state.dash.t / state.dash.cd, 0, 1);
+      elDashFill.style.transform = `scaleX(${dashPct})`;
+
+      if (state.shake > 0) state.shake = Math.max(0, state.shake - dt);
+    }
+
+    function render(t){
+      // camera shake
+      let sx = 0, sy = 0;
+      if (state.shake > 0){
+        const s = state.shake * 14;
+        sx = rand(-s, s);
+        sy = rand(-s, s);
+      }
+
+      ctx.save();
+      ctx.translate(sx, sy);
+
+      drawBackground(t);
+
+      // particles behind
+      for (const p of puffs){
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(255,255,255,${Math.max(0, p.life) * 0.55})`;
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+        ctx.fill();
+      }
+
+      // fish
+      for (const f of fishes) drawFish(f);
+
+      // bots
+      for (const b of bots) drawBot(b, t);
+
+      // cat
+      drawCat(cat, t);
+
+      // border glow
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(10, 10, W-20, H-20);
+
+      ctx.restore();
+
+      // paused banner
+      if (running && paused){
+        ctx.save();
+        ctx.fillStyle = "rgba(0,0,0,0.35)";
+        ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = "rgba(255,255,255,0.9)";
+        ctx.font = "700 28px ui-sans-serif, system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("Paused", W/2, H/2 - 8);
+        ctx.fillStyle = "rgba(255,255,255,0.65)";
+        ctx.font = "14px ui-sans-serif, system-ui";
+        ctx.fillText("Press P to resume", W/2, H/2 + 18);
+        ctx.restore();
+      }
+    }
+
+    // ===== Controls: start/end =====
+    function startGame(){
+      overlay.style.display = "none";
+      running = true;
+      paused = false;
+      last = performance.now();
+    }
+
+    function endGame(){
+      running = false;
+      paused = false;
+
+      // show overlay with results
+      overlay.style.display = "flex";
+      overlay.querySelector(".title").textContent = "Game Over";
+      overlay.querySelector(".desc").innerHTML =
+        `Final score: <b>${state.score}</b><br/>Level reached: <b>${state.level}</b><br/><span style="color:rgba(255,255,255,.68)">Press Start to play again.</span>`;
+    }
+
+    startBtn.addEventListener("click", () => {
+      overlay.querySelector(".title").textContent = "Cat Dash: Fish Quest";
+      overlay.querySelector(".desc").innerHTML =
+        `You’re a cute little cat in a dreamy room. Grab fish 🐟 for points.
+         Roombas 🤖 chase you. Survive, level up, and vibe.`;
+      resetGame();
+      startGame();
+    });
+
+    howBtn.addEventListener("click", () => {
+      alert("Move with WASD/Arrow keys. Hold Shift to Dash when the bar is full. Avoid roombas and collect fish. Press P to pause.");
+    });
+
+    // Start in menu state
+    resetGame();
+
+    // Add roundRect if needed (Safari supports it now, but polyfill for older browsers)
+    if (!CanvasRenderingContext2D.prototype.roundRect){
+      CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+        r = Math.min(r, w/2, h/2);
+        this.beginPath();
+        this.moveTo(x+r,y);
+        this.arcTo(x+w,y, x+w,y+h, r);
+        this.arcTo(x+w,y+h, x,y+h, r);
+        this.arcTo(x,y+h, x,y, r);
+        this.arcTo(x,y, x+w,y, r);
+        this.closePath();
+        return this;
+      };
+    }
+  </script>
+</body>
+</html>
